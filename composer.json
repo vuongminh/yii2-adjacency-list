@@ -31,11 +31,5 @@
     "psr-4": {
       "paulzi\\adjacencyList\\": ""
     }
-  },
-  "repositories": [
-    {
-      "type": "vcs",
-      "url": "https://github.com/vuongminh/yii2-sortable"
-    }
-  ]
+  }
 }
