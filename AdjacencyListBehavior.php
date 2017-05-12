@@ -129,8 +129,10 @@ class AdjacencyListBehavior extends Behavior
     {
         $tableName = $this->owner->tableName();
         $ids = $this->getParentsIds($depth);
-        $query = $this->owner->find()
-            ->andWhere(["{$tableName}.[[" . $this->getPrimaryKey() . "]]" => $ids]);
+        $query = $this->owner->find();
+        $tablesUsedInFrom = $query->getTablesUsedInFrom();
+        $alias = array_search($tableName, $tablesUsedInFrom);
+        $query->andWhere(["{$alias}.[[" . $this->getPrimaryKey() . "]]" => $ids]);
         $query->multiple = true;
         return $query;
     }
@@ -176,8 +178,10 @@ class AdjacencyListBehavior extends Behavior
         $tableName = $this->owner->tableName();
         $id = $this->getParentsIds();
         $id = $id ? $id[count($id) - 1] : $this->owner->primaryKey;
-        $query = $this->owner->find()
-            ->andWhere(["{$tableName}.[[" . $this->getPrimaryKey() . "]]" => $id]);
+        $query = $this->owner->find();
+        $tablesUsedInFrom = $query->getTablesUsedInFrom();
+        $alias = array_search($tableName, $tablesUsedInFrom);
+        $query->andWhere(["{$alias}.[[" . $this->getPrimaryKey() . "]]" => $id]);
         $query->multiple = false;
         return $query;
     }
@@ -194,8 +198,10 @@ class AdjacencyListBehavior extends Behavior
         if ($andSelf) {
             $ids[] = $this->owner->getPrimaryKey();
         }
-        $query = $this->owner->find()
-            ->andWhere(["{$tableName}.[[" . $this->getPrimaryKey() . "]]" => $ids]);
+        $query = $this->owner->find();
+        $tablesUsedInFrom = $query->getTablesUsedInFrom();
+        $alias = array_search($tableName, $tablesUsedInFrom);
+        $query->andWhere(["{$alias}.[[" . $this->getPrimaryKey() . "]]" => $ids]);
         $query->multiple = true;
         return $query;
     }
@@ -262,13 +268,15 @@ class AdjacencyListBehavior extends Behavior
             throw new NotSupportedException('prev() not allow if not set sortable');
         }
         $tableName = $this->owner->tableName();
-        $query = $this->owner->find()
-            ->andWhere([
+        $query = $this->owner->find();
+        $tablesUsedInFrom = $query->getTablesUsedInFrom();
+        $alias = array_search($tableName, $tablesUsedInFrom);
+        $query->andWhere([
                 'and',
-                ["{$tableName}.[[{$this->parentAttribute}]]" => $this->owner->getAttribute($this->parentAttribute)],
-                ['<', "{$tableName}.[[{$this->behavior->sortAttribute}]]", $this->owner->getSortablePosition()],
+                ["{$alias}.[[{$this->parentAttribute}]]" => $this->owner->getAttribute($this->parentAttribute)],
+                ['<', "{$alias}.[[{$this->behavior->sortAttribute}]]", $this->owner->getSortablePosition()],
             ])
-            ->orderBy(["{$tableName}.[[{$this->behavior->sortAttribute}]]" => SORT_DESC])
+            ->orderBy(["{$alias}.[[{$this->behavior->sortAttribute}]]" => SORT_DESC])
             ->limit(1);
         $query->multiple = false;
         return $query;
@@ -284,13 +292,15 @@ class AdjacencyListBehavior extends Behavior
             throw new NotSupportedException('next() not allow if not set sortable');
         }
         $tableName = $this->owner->tableName();
-        $query = $this->owner->find()
-            ->andWhere([
+        $query = $this->owner->find();
+        $tablesUsedInFrom = $query->getTablesUsedInFrom();
+        $alias = array_search($tableName, $tablesUsedInFrom);
+        $query->andWhere([
                 'and',
-                ["{$tableName}.[[{$this->parentAttribute}]]" => $this->owner->getAttribute($this->parentAttribute)],
-                ['>', "{$tableName}.[[{$this->behavior->sortAttribute}]]", $this->owner->getSortablePosition()],
+                ["{$alias}.[[{$this->parentAttribute}]]" => $this->owner->getAttribute($this->parentAttribute)],
+                ['>', "{$alias}.[[{$this->behavior->sortAttribute}]]", $this->owner->getSortablePosition()],
             ])
-            ->orderBy(["{$tableName}.[[{$this->behavior->sortAttribute}]]" => SORT_ASC])
+            ->orderBy(["{$alias}.[[{$this->behavior->sortAttribute}]]" => SORT_ASC])
             ->limit(1);
         $query->multiple = false;
         return $query;

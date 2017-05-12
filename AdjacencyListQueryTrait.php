@@ -17,9 +17,13 @@ trait AdjacencyListQueryTrait
      */
     public function roots()
     {
-        /** @var \yii\db\ActiveQuery $this */
+        /**
+         * @var \yii\db\ActiveQuery $this
+         * @var \yii\db\ActiveRecord $model
+         */
         $class = $this->modelClass;
         $model = new $class;
-        return $this->andWhere([$model->parentAttribute => null]);
+        $alias = array_search($model->tableName(), $this->getTablesUsedInFrom());
+        return $this->andWhere(["{$alias}.[[{$model->parentAttribute}]]" => null]);
     }
 }
