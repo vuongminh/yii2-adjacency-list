@@ -11,6 +11,7 @@ use Yii;
 use yii\base\Behavior;
 use yii\base\Exception;
 use yii\base\NotSupportedException;
+use yii\db\ActiveQuery;
 use yii\db\ActiveRecord;
 use yii\db\Query;
 use paulzi\sortable\SortableBehavior;
@@ -24,12 +25,12 @@ use paulzi\sortable\SortableBehavior;
  */
 class AdjacencyListBehavior extends Behavior
 {
-    const OPERATION_MAKE_ROOT       = 1;
-    const OPERATION_PREPEND_TO      = 2;
-    const OPERATION_APPEND_TO       = 3;
-    const OPERATION_INSERT_BEFORE   = 4;
-    const OPERATION_INSERT_AFTER    = 5;
-    const OPERATION_DELETE_ALL      = 6;
+    const OPERATION_MAKE_ROOT = 1;
+    const OPERATION_PREPEND_TO = 2;
+    const OPERATION_APPEND_TO = 3;
+    const OPERATION_INSERT_BEFORE = 4;
+    const OPERATION_INSERT_AFTER = 5;
+    const OPERATION_DELETE_ALL = 6;
 
     /**
      * @var string
@@ -93,12 +94,12 @@ class AdjacencyListBehavior extends Behavior
     public function events()
     {
         return [
-            ActiveRecord::EVENT_BEFORE_INSERT   => 'beforeSave',
-            ActiveRecord::EVENT_AFTER_INSERT    => 'afterSave',
-            ActiveRecord::EVENT_BEFORE_UPDATE   => 'beforeSave',
-            ActiveRecord::EVENT_AFTER_UPDATE    => 'afterSave',
-            ActiveRecord::EVENT_BEFORE_DELETE   => 'beforeDelete',
-            ActiveRecord::EVENT_AFTER_DELETE    => 'afterDelete',
+            ActiveRecord::EVENT_BEFORE_INSERT => 'beforeSave',
+            ActiveRecord::EVENT_AFTER_INSERT => 'afterSave',
+            ActiveRecord::EVENT_BEFORE_UPDATE => 'beforeSave',
+            ActiveRecord::EVENT_AFTER_UPDATE => 'afterSave',
+            ActiveRecord::EVENT_BEFORE_DELETE => 'beforeDelete',
+            ActiveRecord::EVENT_AFTER_DELETE => 'afterDelete',
         ];
     }
 
@@ -111,8 +112,8 @@ class AdjacencyListBehavior extends Behavior
         if ($this->sortable !== false) {
             $this->behavior = Yii::createObject(array_merge(
                 [
-                    'class'         => SortableBehavior::className(),
-                    'query'         => [$this->parentAttribute],
+                    'class' => SortableBehavior::className(),
+                    'query' => [$this->parentAttribute],
                 ],
                 $this->sortable
             ));
@@ -122,34 +123,38 @@ class AdjacencyListBehavior extends Behavior
 
     /**
      * @param int|null $depth
-     * @return \yii\db\ActiveQuery
+     * @return ActiveQuery
      * @throws Exception
      */
     public function getParents($depth = null)
     {
-        $tableName = $this->owner->tableName();
         $ids = $this->getParentsIds($depth);
+        $tableName = $this->owner->tableName();
         $query = $this->owner->find();
-        $tablesUsedInFrom = $query->getTablesUsedInFrom();
-        $alias = array_search($tableName, $tablesUsedInFrom);
+        if ($query instanceof ActiveQuery) {
+            $alias = array_search($tableName, $query->getTablesUsedInFrom());
+        } else {
+            $alias = $tableName;
+        }
         $query->andWhere(["{$alias}.[[" . $this->getPrimaryKey() . "]]" => $ids]);
         $query->multiple = true;
         return $query;
     }
 
     /**
+     * @param bool $cache
      * @return ActiveRecord[]
      * @throws Exception
      */
-    public function getParentsOrdered()
+    public function getParentsOrdered($cache = true)
     {
-        if ($this->_parentsOrdered !== null) {
+        if ($this->_parentsOrdered !== null && $cache) {
             return $this->_parentsOrdered;
         }
         $parents = $this->getParents()->all();
-        $ids = array_flip($this->getParentsIds());
+        $ids = array_flip($this->getParentsIds($cache));
         $primaryKey = $this->getPrimaryKey();
-        usort($parents, function($a, $b) use ($ids, $primaryKey) {
+        usort($parents, function ($a, $b) use ($ids, $primaryKey) {
             $aIdx = $ids[$a->$primaryKey];
             $bIdx = $ids[$b->$primaryKey];
             if ($aIdx == $bIdx) {
@@ -162,7 +167,7 @@ class AdjacencyListBehavior extends Behavior
     }
 
     /**
-     * @return \yii\db\ActiveQuery
+     * @return ActiveQuery
      * @throws Exception
      */
     public function getParent()
@@ -171,16 +176,19 @@ class AdjacencyListBehavior extends Behavior
     }
 
     /**
-     * @return \yii\db\ActiveQuery
+     * @return ActiveQuery
      */
     public function getRoot()
     {
-        $tableName = $this->owner->tableName();
         $id = $this->getParentsIds();
         $id = $id ? $id[count($id) - 1] : $this->owner->primaryKey;
+        $tableName = $this->owner->tableName();
         $query = $this->owner->find();
-        $tablesUsedInFrom = $query->getTablesUsedInFrom();
-        $alias = array_search($tableName, $tablesUsedInFrom);
+        if ($query instanceof ActiveQuery) {
+            $alias = array_search($tableName, $query->getTablesUsedInFrom());
+        } else {
+            $alias = $tableName;
+        }
         $query->andWhere(["{$alias}.[[" . $this->getPrimaryKey() . "]]" => $id]);
         $query->multiple = false;
         return $query;
@@ -189,33 +197,38 @@ class AdjacencyListBehavior extends Behavior
     /**
      * @param int|null $depth
      * @param bool $andSelf
-     * @return \yii\db\ActiveQuery
+     * @param bool $cache
+     * @return ActiveQuery
      */
-    public function getDescendants($depth = null, $andSelf = false)
+    public function getDescendants($depth = null, $andSelf = false, $cache = true)
     {
-        $tableName = $this->owner->tableName();
-        $ids = $this->getDescendantsIds($depth, true);
+        $ids = $this->getDescendantsIds($depth, true, $cache);
         if ($andSelf) {
             $ids[] = $this->owner->getPrimaryKey();
         }
+        $tableName = $this->owner->tableName();
         $query = $this->owner->find();
-        $tablesUsedInFrom = $query->getTablesUsedInFrom();
-        $alias = array_search($tableName, $tablesUsedInFrom);
+        if ($query instanceof ActiveQuery) {
+            $alias = array_search($tableName, $query->getTablesUsedInFrom());
+        } else {
+            $alias = $tableName;
+        }
         $query->andWhere(["{$alias}.[[" . $this->getPrimaryKey() . "]]" => $ids]);
         $query->multiple = true;
         return $query;
     }
 
     /**
+     * @param bool $cache
      * @return ActiveRecord[]
      * @throws Exception
      */
-    public function getDescendantsOrdered()
+    public function getDescendantsOrdered($cache = true)
     {
         $descendants = $this->owner->descendants;
-        $ids = array_flip($this->getDescendantsIds(null, true));
+        $ids = array_flip($this->getDescendantsIds(null, true, $cache));
         $primaryKey = $this->getPrimaryKey();
-        usort($descendants, function($a, $b) use ($ids, $primaryKey) {
+        usort($descendants, function ($a, $b) use ($ids, $primaryKey) {
             $aIdx = $ids[$a->$primaryKey];
             $bIdx = $ids[$b->$primaryKey];
             if ($aIdx == $bIdx) {
@@ -228,7 +241,7 @@ class AdjacencyListBehavior extends Behavior
     }
 
     /**
-     * @return \yii\db\ActiveQuery
+     * @return ActiveQuery
      */
     public function getChildren()
     {
@@ -241,13 +254,13 @@ class AdjacencyListBehavior extends Behavior
 
     /**
      * @param int|null $depth
-     * @return \yii\db\ActiveQuery
+     * @return ActiveQuery
      */
     public function getLeaves($depth = null)
     {
         $query = $this->getDescendants($depth)
             ->joinWith(['children' => function ($query) {
-                /** @var \yii\db\ActiveQuery $query */
+                /** @var ActiveQuery $query */
                 $modelClass = $query->modelClass;
                 $query
                     ->from($modelClass::tableName() . ' children')
@@ -259,7 +272,7 @@ class AdjacencyListBehavior extends Behavior
     }
 
     /**
-     * @return \yii\db\ActiveQuery
+     * @return ActiveQuery
      * @throws NotSupportedException
      */
     public function getPrev()
@@ -269,13 +282,16 @@ class AdjacencyListBehavior extends Behavior
         }
         $tableName = $this->owner->tableName();
         $query = $this->owner->find();
-        $tablesUsedInFrom = $query->getTablesUsedInFrom();
-        $alias = array_search($tableName, $tablesUsedInFrom);
+        if ($query instanceof ActiveQuery) {
+            $alias = array_search($tableName, $query->getTablesUsedInFrom());
+        } else {
+            $alias = $tableName;
+        }
         $query->andWhere([
-                'and',
-                ["{$alias}.[[{$this->parentAttribute}]]" => $this->owner->getAttribute($this->parentAttribute)],
-                ['<', "{$alias}.[[{$this->behavior->sortAttribute}]]", $this->owner->getSortablePosition()],
-            ])
+            'and',
+            ["{$alias}.[[{$this->parentAttribute}]]" => $this->owner->getAttribute($this->parentAttribute)],
+            ['<', "{$alias}.[[{$this->behavior->sortAttribute}]]", $this->owner->getSortablePosition()],
+        ])
             ->orderBy(["{$alias}.[[{$this->behavior->sortAttribute}]]" => SORT_DESC])
             ->limit(1);
         $query->multiple = false;
@@ -283,7 +299,7 @@ class AdjacencyListBehavior extends Behavior
     }
 
     /**
-     * @return \yii\db\ActiveQuery
+     * @return ActiveQuery
      * @throws NotSupportedException
      */
     public function getNext()
@@ -293,13 +309,16 @@ class AdjacencyListBehavior extends Behavior
         }
         $tableName = $this->owner->tableName();
         $query = $this->owner->find();
-        $tablesUsedInFrom = $query->getTablesUsedInFrom();
-        $alias = array_search($tableName, $tablesUsedInFrom);
+        if ($query instanceof ActiveQuery) {
+            $alias = array_search($tableName, $query->getTablesUsedInFrom());
+        } else {
+            $alias = $tableName;
+        }
         $query->andWhere([
-                'and',
-                ["{$alias}.[[{$this->parentAttribute}]]" => $this->owner->getAttribute($this->parentAttribute)],
-                ['>', "{$alias}.[[{$this->behavior->sortAttribute}]]", $this->owner->getSortablePosition()],
-            ])
+            'and',
+            ["{$alias}.[[{$this->parentAttribute}]]" => $this->owner->getAttribute($this->parentAttribute)],
+            ['>', "{$alias}.[[{$this->behavior->sortAttribute}]]", $this->owner->getSortablePosition()],
+        ])
             ->orderBy(["{$alias}.[[{$this->behavior->sortAttribute}]]" => SORT_ASC])
             ->limit(1);
         $query->multiple = false;
@@ -324,10 +343,10 @@ class AdjacencyListBehavior extends Behavior
             }
             return [];
         }
-        $result     = [(string)$parentId];
-        $tableName  = $this->owner->tableName();
+        $result = [(string)$parentId];
+        $tableName = $this->owner->tableName();
         $primaryKey = $this->getPrimaryKey();
-        $depthCur   = 1;
+        $depthCur = 1;
         while ($parentId !== null && ($depth === null || $depthCur < $depth)) {
             $query = (new Query())
                 ->select(["lvl0.[[{$this->parentAttribute}]] AS lvl0"])
@@ -370,10 +389,10 @@ class AdjacencyListBehavior extends Behavior
             return $flat && !empty($result) ? call_user_func_array('array_merge', $result) : $result;
         }
 
-        $result       = [];
-        $tableName    = $this->owner->tableName();
-        $primaryKey   = $this->getPrimaryKey();
-        $depthCur     = 0;
+        $result = [];
+        $tableName = $this->owner->tableName();
+        $primaryKey = $this->getPrimaryKey();
+        $depthCur = 0;
         $lastLevelIds = [$this->owner->primaryKey];
         while (!empty($lastLevelIds) && ($depth === null || $depthCur < $depth)) {
             $levels = 1;
@@ -414,7 +433,7 @@ class AdjacencyListBehavior extends Behavior
                 for ($i = 0; $i < $levels; $i++) {
                     if (isset($columns[$i])) {
                         $lastLevelIds = array_keys($columns[$i]);
-                        $result[]     = $lastLevelIds;
+                        $result[] = $lastLevelIds;
                     } else {
                         $lastLevelIds = [];
                         break;
@@ -452,7 +471,7 @@ class AdjacencyListBehavior extends Behavior
                     $depths[$id] = $i + 1;
                 }
             }
-            $nodes  = $this->getDescendants($depth)
+            $nodes = $this->getDescendants($depth)
                 ->orderBy($this->sortable !== false ? [$this->behavior->sortAttribute => SORT_ASC] : null)
                 ->all();
         }
@@ -655,7 +674,7 @@ class AdjacencyListBehavior extends Behavior
     public function afterSave()
     {
         $this->operation = null;
-        $this->node      = null;
+        $this->node = null;
     }
 
     /**
@@ -668,7 +687,7 @@ class AdjacencyListBehavior extends Behavior
             throw new Exception('Can not delete a node when it is new record.');
         }
         if ($this->isRoot() && $this->operation !== self::OPERATION_DELETE_ALL) {
-            throw new Exception('Method "'. $this->owner->className() . '::delete" is not supported for deleting root nodes.');
+            throw new Exception('Method "' . $this->owner->className() . '::delete" is not supported for deleting root nodes.');
         }
         $this->owner->refresh();
     }
